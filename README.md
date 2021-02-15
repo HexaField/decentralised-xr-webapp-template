@@ -1,6 +1,8 @@
-# Snowpack Capacitor Template
+# Decentralised XR Webapp Template
 
-Allows for lightweight & optimized testing, building and distribution in browser, desktop and mobile contexts using snowpack and capacitor. Does not currently include mobile builds. Refer to capacitor for more details.
+Built with React, Three.js & IPFS.
+
+Run a node in a network of peers on a desktop, mobile or browser.
 
 ## Snowpack
 
@@ -10,7 +12,7 @@ Allows for lightweight & optimized testing, building and distribution in browser
 
 ## Capacitor
 
-First build then either
+First build then
 
 - open in electron
 
@@ -19,3 +21,14 @@ First build then either
 - update electron build 
 
 `npx cap sync @capacitor-community/electron`
+
+
+
+## To Do
+
+https://gist.github.com/bellbind/f65f78a35bbbd4917a8ae4a6b18c5012
+https://stackoverflow.com/a/64575363
+
+Offscreen canvas
+IPFS networking
+PhysX

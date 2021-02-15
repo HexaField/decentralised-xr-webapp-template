@@ -1,7 +1,12 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import App from './App';
+import App from './App/index';
 import './index.css';
+import { startNode } from './node/index'
+import type { PeerNode } from './node/PeerNode';
+
+const node: PeerNode = startNode()
+node.start()
 
 ReactDOM.render(
   <React.StrictMode>
