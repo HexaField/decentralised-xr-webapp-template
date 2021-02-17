@@ -43,6 +43,12 @@ export default class ProxyElement extends EventDispatcher {
   public get clientHeight() {
     return this.height
   }
+  public get innerWidth() {
+    return this.width
+  }
+  public get innerHeight() {
+    return this.height
+  }
   public getBoundingClientRect() {
     return {
       left: this.left,

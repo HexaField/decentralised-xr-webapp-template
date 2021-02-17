@@ -12,7 +12,7 @@ import {
   IcosahedronBufferGeometry
 } from 'three'
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls'
-import ProxyElement from '../worker/proxyElement'
+import ProxyElement from '../workerize/proxyElement'
 import { easyOrigin } from './origin'
 
 export class ThreeScene {
@@ -156,8 +156,7 @@ export class ThreeScene {
   }
 
   public handleResize(e: Event) {
-    console.log(e)
-    e.preventDefault()
+    console.log('resize', e)
 
   }
 
@@ -165,6 +164,7 @@ export class ThreeScene {
    * ClickEventHandler
    */
   public handleClick(e: MouseEvent) {
+    console.log('click', e)
     e.preventDefault()
   }
 

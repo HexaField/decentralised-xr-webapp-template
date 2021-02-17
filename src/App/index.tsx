@@ -1,12 +1,12 @@
 import React, { useEffect } from 'react';
 import './index.css';
-import { createWorker } from './worker'
+import workerize from './workerize/'
 
 function App() {
   useEffect(() => {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
     (globalThis as any).canvas = canvas;
-    createWorker(canvas);
+    workerize(canvas);
   })
 
   return (
