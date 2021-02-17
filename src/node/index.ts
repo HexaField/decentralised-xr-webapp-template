@@ -1,5 +1,5 @@
-import { PeerNode } from "./PeerNode"
+import { PeerNode } from './PeerNode';
 
 export const startNode = () => {
   return new PeerNode();
-}
+};

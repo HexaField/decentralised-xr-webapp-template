@@ -4,6 +4,6 @@ export class PeerNode {
   }
 
   async start() {
-    console.log('server started')
+    console.log('server started');
   }
 }
