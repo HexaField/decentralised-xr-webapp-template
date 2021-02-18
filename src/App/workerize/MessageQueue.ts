@@ -63,7 +63,10 @@ class MessageQueue extends EventDispatcherProxy {
 
   constructor(messagePort: any, eventTarget: EventTarget) {
     super(eventTarget, (args: any) => {
-      this.queue.push({ messageType: MessageType.EVENT, message: simplifyObject(args) } as Message);
+      this.queue.push({
+        messageType: MessageType.EVENT,
+        message: simplifyObject(args),
+      } as Message);
     });
     this.messagePort = messagePort;
     this.eventTarget = eventTarget;

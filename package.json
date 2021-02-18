@@ -14,7 +14,7 @@
     "three": "^0.125.2"
   },
   "pre-commit": [
-    "format",
+    "lint",
     "typescript-check"
   ],
   "devDependencies": {
