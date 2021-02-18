@@ -1,3 +1,4 @@
+// @ts-ignore
 import Stats from 'stats.js';
 import { createWorker } from './MessageQueue';
 
