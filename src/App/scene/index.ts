@@ -59,11 +59,10 @@ export class ThreeScene {
 
     const video = document.createElement('video');
     video.src = 'ccc.mp4';
-    video.play();
     video.addEventListener('play', () => {
       console.log('video play!');
     });
-    console.log(video);
+    video.play();
 
     this.scene.add(
       new Mesh(

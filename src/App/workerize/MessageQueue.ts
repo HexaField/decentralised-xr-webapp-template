@@ -1,11 +1,11 @@
 import { simplifyObject } from '../../util/simplifyObject';
 import { EventDispatcher, Event as DispatchEvent, Object3D } from 'three';
 import { generateUUID } from '../../util/generateUUID';
+import { isWebWorker } from '../../util/getEnv';
 
 interface Message {
-  type: MessageType | string;
+  messageType: MessageType | string;
   message: object;
-  uuid?: string;
   transferables?: Transferable[];
 }
 
@@ -18,6 +18,9 @@ enum MessageType {
   DOCUMENT_ELEMENT_CREATE,
   DOCUMENT_ELEMENT_FUNCTION_CALL,
   DOCUMENT_ELEMENT_PARAM_SET,
+  DOCUMENT_ELEMENT_ADD_EVENT,
+  DOCUMENT_ELEMENT_REMOVE_EVENT,
+  DOCUMENT_ELEMENT_EVENT,
 }
 
 class EventDispatcherProxy extends EventDispatcher {
@@ -52,22 +55,22 @@ class EventDispatcherProxy extends EventDispatcher {
 class MessageQueue extends EventDispatcherProxy {
   [x: string]: any; // this is like sex and magic had sex
 
-  worker: Worker;
-  messageQueue: Message[];
+  messagePort: any;
+  queue: Message[];
   interval: NodeJS.Timeout;
   remoteDocumentObjects: Map<string, DOMProxy>;
   eventTarget: EventTarget;
 
-  constructor(worker: Worker, eventTarget: EventTarget) {
+  constructor(messagePort: any, eventTarget: EventTarget) {
     super(eventTarget, (args: any) => {
-      this.push(MessageType.EVENT, simplifyObject(args));
+      this.queue.push({ messageType: MessageType.EVENT, message: simplifyObject(args) } as Message);
     });
-    this.worker = worker;
+    this.messagePort = messagePort;
     this.eventTarget = eventTarget;
-    this.messageQueue = [];
+    this.queue = [];
     this.remoteDocumentObjects = new Map<string, DOMProxy>();
 
-    this.worker.onmessage = (message: any) => {
+    this.messagePort.onmessage = (message: any) => {
       this.receiveQueue(message.data as object[]);
     };
     this.interval = setInterval(() => {
@@ -75,51 +78,53 @@ class MessageQueue extends EventDispatcherProxy {
     }, 1000 / 60);
   }
 
-  push(
-    type: MessageType | any,
-    message: object,
-    transferables?: Transferable[],
-  ) {
-    this.messageQueue.push({
-      type,
-      message,
-      transferables,
-    });
-  }
+  // push(
+  //   type: MessageType | any,
+  //   message: object,
+  //   transferables?: Transferable[],
+  // ) {
+  //   this.queue.push({
+  //     messageType: type,
+  //     message,
+  //     transferables,
+  //   });
+  // }
 
   sendQueue() {
-    if (!this.messageQueue?.length) return;
+    if (!this.queue?.length) return;
     const messages: object[] = [];
-    this.messageQueue.forEach((message: Message) => {
+    this.queue.forEach((message: Message) => {
       messages.push({
-        type: message.type,
+        type: message.messageType,
         message: message.message,
       });
     });
     const transferables: Transferable[] = [];
-    this.messageQueue.forEach((message: Message) => {
+    this.queue.forEach((message: Message) => {
       message.transferables && transferables.push(...message.transferables);
     });
     try {
-      this.worker.postMessage(messages, transferables);
+      this.messagePort.postMessage(messages, transferables);
     } catch (e) {
       console.log(e);
     }
-    this.messageQueue = [];
+    this.queue = [];
   }
 
   receiveQueue(queue: object[]) {
     queue.forEach((element: object) => {
       /** @ts-ignore */
-      const { type, message, id } = element;
-      if (!id || id === '') {
+      const { type, message } = element;
+      if (!message.proxyID || message.proxyID === '') {
         if (this.messageTypeFunctions.has(type)) {
           this.messageTypeFunctions.get(type)(message);
         }
       } else {
-        this.remoteDocumentObjects.get(id)?.messageTypeFunctions.get(type)(
-          message,
-        );
+        if (this.remoteDocumentObjects.get(message.proxyID)) {
+          this.remoteDocumentObjects
+            .get(message.proxyID)
+            ?.messageTypeFunctions.get(type)(message);
+        }
       }
     });
     this.dispatchEvent(new CustomEvent('queue'));
@@ -129,7 +134,10 @@ class MessageQueue extends EventDispatcherProxy {
     type: string,
     listener: (event: DispatchEvent) => void,
   ): void {
-    this.push(MessageType.ADD_EVENT, { type });
+    this.queue.push({
+      messageType: MessageType.ADD_EVENT,
+      message: { type },
+    } as Message);
     super.addEventListener(type, listener);
   }
 
@@ -137,7 +145,10 @@ class MessageQueue extends EventDispatcherProxy {
     type: string,
     listener: (event: DispatchEvent) => void,
   ): void {
-    this.push(MessageType.REMOVE_EVENT, { type });
+    this.queue.push({
+      messageType: MessageType.REMOVE_EVENT,
+      message: { type },
+    } as Message);
     super.removeEventListener(type, listener);
   }
 }
@@ -154,24 +165,33 @@ class DOMProxy extends EventDispatcherProxy {
     eventTarget?: EventTarget,
   ) {
     super(eventTarget || messageQueue.eventTarget, (args: any) => {
-      this.messageQueue.push(MessageType.EVENT, simplifyObject(args));
+      this.messageQueue.queue.push({
+        messageType: MessageType.EVENT,
+        message: simplifyObject(args),
+      } as Message);
     });
     this.type = type;
     this.messageQueue = messageQueue;
     this.eventTarget = eventTarget || messageQueue.eventTarget;
     this.uuid = generateUUID();
     this.messageQueue.remoteDocumentObjects.set(this.uuid, this);
-    this.messageQueue.push(MessageType.DOCUMENT_ELEMENT_CREATE, {
-      type,
-      id: this.uuid,
-    });
+    this.messageQueue.queue.push({
+      messageType: MessageType.DOCUMENT_ELEMENT_CREATE,
+      message: {
+        type,
+        uuid: this.uuid,
+      },
+    } as Message);
   }
 
   addEventListener(
     type: string,
     listener: (event: DispatchEvent) => void,
   ): void {
-    this.messageQueue.push(MessageType.ADD_EVENT, { type, id: this.uuid });
+    this.messageQueue.queue.push({
+      messageType: MessageType.DOCUMENT_ELEMENT_ADD_EVENT,
+      message: { type, uuid: this.uuid },
+    } as Message);
     super.addEventListener(type, listener);
   }
 
@@ -179,7 +199,10 @@ class DOMProxy extends EventDispatcherProxy {
     type: string,
     listener: (event: DispatchEvent) => void,
   ): void {
-    this.messageQueue.push(MessageType.REMOVE_EVENT, { type, id: this.uuid });
+    this.messageQueue.queue.push({
+      messageType: MessageType.DOCUMENT_ELEMENT_REMOVE_EVENT,
+      message: { type, uuid: this.uuid },
+    } as Message);
     super.removeEventListener(type, listener);
   }
 }
@@ -197,22 +220,32 @@ class AudioProxy extends DOMProxy {
 }
 
 class VideoProxy extends AudioProxy {
+  width: number;
+  height: number;
   constructor(messageQueue: MessageQueue) {
     super(messageQueue, 'video');
+    this.width = 0;
+    this.height = 0;
   }
   play() {
-    this.messageQueue.push(MessageType.DOCUMENT_ELEMENT_FUNCTION_CALL, {
-      call: 'play',
-      id: this.uuid,
-      args: [],
-    });
+    this.messageQueue.queue.push({
+      messageType: MessageType.DOCUMENT_ELEMENT_FUNCTION_CALL,
+      message: {
+        call: 'play',
+        uuid: this.uuid,
+        args: [],
+      },
+    } as Message);
   }
   set src(src: string) {
-    this.messageQueue.push(MessageType.DOCUMENT_ELEMENT_PARAM_SET, {
-      param: 'src',
-      id: this.uuid,
-      arg: src,
-    });
+    this.messageQueue.queue.push({
+      messageType: MessageType.DOCUMENT_ELEMENT_PARAM_SET,
+      message: {
+        param: 'src',
+        uuid: this.uuid,
+        arg: src,
+      },
+    } as Message);
   }
 }
 
@@ -224,8 +257,8 @@ class AudioObjectProxy extends Object3D {
 }
 
 class WorkerProxy extends MessageQueue {
-  constructor(worker: Worker, eventTarget: EventTarget) {
-    super(worker, eventTarget);
+  constructor(messagePort: any, eventTarget: EventTarget) {
+    super(messagePort, eventTarget);
   }
 }
 
@@ -236,8 +269,8 @@ class MainProxy extends MessageQueue {
   left: number;
   top: number;
 
-  constructor(worker: Worker, eventTarget: EventTarget) {
-    super(worker, eventTarget);
+  constructor(messagePort: any, eventTarget: EventTarget) {
+    super(messagePort, eventTarget);
 
     this.canvas = null;
     this.width = 0;
@@ -288,28 +321,59 @@ export async function createWorker(
   const documentElementMap = new Map<string, any>();
   messageQueue.messageTypeFunctions.set(
     MessageType.DOCUMENT_ELEMENT_FUNCTION_CALL,
-    ({ call, id, args }: { call: string; id: string; args: any[] }) => {
-      console.log(call, id, args, documentElementMap.get(id));
-      documentElementMap.get(id)[call](...args);
+    ({ call, uuid, args }: { call: string; uuid: string; args: any[] }) => {
+      documentElementMap.get(uuid)[call](...args);
     },
   );
   messageQueue.messageTypeFunctions.set(
     MessageType.DOCUMENT_ELEMENT_PARAM_SET,
-    ({ param, id, arg }: { param: string; id: string; arg: any }) => {
-      console.log(param, id, arg, documentElementMap.get(id));
-      documentElementMap.get(id)[param] = arg;
+    ({ param, uuid, arg }: { param: string; uuid: string; arg: any }) => {
+      documentElementMap.get(uuid)[param] = arg;
+    },
+  );
+  messageQueue.messageTypeFunctions.set(
+    MessageType.DOCUMENT_ELEMENT_ADD_EVENT,
+    ({ type, uuid }: { type: string; uuid: string }) => {
+      if (documentElementMap.get(uuid)) {
+        const listener = (...args: any) => {
+          const event = simplifyObject(args) as any;
+          event.type = type;
+          event.proxyID = uuid;
+          messageQueue.queue.push({
+            messageType: MessageType.EVENT,
+            message: event,
+          } as Message);
+        };
+        documentElementMap.get(uuid).addEventListener(type, listener);
+        documentElementMap.get(uuid).proxyListener = listener;
+      }
+    },
+  );
+  messageQueue.messageTypeFunctions.set(
+    MessageType.DOCUMENT_ELEMENT_REMOVE_EVENT,
+    ({ type, uuid }: { type: string; uuid: string }) => {
+      if (documentElementMap.get(uuid)) {
+        documentElementMap
+          .get(uuid)
+          .removeEventListener(
+            type,
+            documentElementMap.get(uuid).proxyListener,
+          );
+        delete documentElementMap.get(uuid).proxyListener;
+      }
     },
   );
   messageQueue.messageTypeFunctions.set(
     MessageType.DOCUMENT_ELEMENT_CREATE,
-    ({ type, id }: { type: string; id: string }) => {
+    ({ type, uuid }: { type: string; uuid: string }) => {
       switch (type) {
         case 'video':
           {
             const video = document.createElement('video');
+            /** @ts-ignore */
             document.body.append(video);
             video.crossOrigin = 'anonymous';
-            documentElementMap.set(id, video);
+            documentElementMap.set(uuid, video);
           }
           break;
         default:
@@ -317,9 +381,9 @@ export async function createWorker(
       }
     },
   );
-  messageQueue.push(
-    MessageType.OFFSCREEN_CANVAS,
-    {
+  messageQueue.queue.push({
+    messageType: MessageType.OFFSCREEN_CANVAS,
+    message: {
       width,
       height,
       top,
@@ -327,14 +391,17 @@ export async function createWorker(
       canvas: offscreen,
       pixelRatio: window.devicePixelRatio,
     },
-    [offscreen],
-  );
+    transferables: [offscreen],
+  } as Message);
   window.addEventListener('resize', () => {
-    messageQueue.push(MessageType.EVENT, {
-      type: 'resize',
-      width: canvas.clientWidth,
-      height: canvas.clientHeight,
-    });
+    messageQueue.queue.push({
+      messageType: MessageType.EVENT,
+      message: {
+        type: 'resize',
+        width: canvas.clientWidth,
+        height: canvas.clientHeight,
+      },
+    } as Message);
   });
 
   return messageQueue;
