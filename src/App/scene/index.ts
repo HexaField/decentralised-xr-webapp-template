@@ -44,7 +44,6 @@ export class ThreeScene {
 
     this.init = this.init.bind(this);
     this.animate = this.animate.bind(this);
-    this.handleResize = this.handleResize.bind(this);
 
     this.init();
   }
@@ -69,20 +68,31 @@ export class ThreeScene {
     this.animate();
   }
 
-  public handleResize(e: Event) {
-    console.log('resize', e);
+  public resizeCanvas(width: number, height: number) {
+    if (!width || !height) return;
+
+    const aspect = width / height;
+
+    this.camera.aspect = aspect;
+    this.camera.updateProjectionMatrix();
+
+    this.renderer.setSize(width, height, false);
+  }
+
+  public resizeRendererToDisplaySize() {
+    const canvas = this.renderer.domElement;
+    const width = window.innerWidth;
+    const height = window.innerHeight;
+    const needResize = canvas.width !== width || canvas.height !== height;
+    if (needResize) {
+      this.resizeCanvas(width, height);
+    }
+    return needResize;
   }
 
   public animate() {
-    if ((globalThis as any).requestAnimationFrame) {
-      this.raycaster.setFromCamera(this.mouse, this.camera);
-
-      const intersects = this.raycaster.intersectObjects(this.scene.children);
-      if (intersects.length > 0) {
-        // console.log(intersects)
-      }
-      this.renderer.render(this.scene, this.camera);
-    }
+    this.resizeRendererToDisplaySize();
+    this.renderer.render(this.scene, this.camera);
     (globalThis as any).requestAnimationFrame(this.animate);
   }
 }

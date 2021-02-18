@@ -1,13 +1,12 @@
-// @ts-ignore
 import Stats from 'stats.js';
 import { createWorker } from './MessageQueue';
 
-export default (canvas: HTMLCanvasElement): void => {
+export default async (canvas: HTMLCanvasElement): Promise<void> => {
   // @ts-ignore
   if (canvas.transferControlToOffscreen) {
-    (globalThis as any).canvasProxy = renderOffscreenApp(canvas);
+    (globalThis as any).canvasProxy = await renderOffscreenApp(canvas);
   } else {
-    (globalThis as any).canvasProxy = renderScene(canvas);
+    (globalThis as any).canvasProxy = await renderScene(canvas);
   }
 };
 
@@ -29,6 +28,7 @@ const renderOffscreenApp = async (canvas: HTMLCanvasElement) => {
     new URL('./app.worker.js', import.meta.url),
     canvas,
   );
+  return workerProxy;
 };
 
 const startAnmation = (update: () => void) => {

@@ -31,13 +31,13 @@ class MessageQueue extends EventDispatcher {
     this.worker.onmessage = (message: any) => {
       this.receiveQueue(message.data as object[]);
     };
-    const eventListener = (args: Event) => {
+    const eventListener = (args: any) => {
       this.push(MessageType.EVENT, simplifyObject(args));
     };
     this.messageTypeFunctions.set(MessageType.EVENT, (event: any) => {
       event.preventDefault = () => {};
       event.stopPropagation = () => {};
-      this.dispatchEvent(event as Event);
+      this.dispatchEvent(event as any);
     });
     this.messageTypeFunctions.set(
       MessageType.ADD_EVENT,
@@ -97,6 +97,7 @@ class MessageQueue extends EventDispatcher {
         this.messageTypeFunctions.get(type)(message);
       }
     });
+    this.dispatchEvent(new CustomEvent('queue'));
   }
 
   addEventListener(
@@ -123,6 +124,7 @@ class WorkerProxy extends MessageQueue {
 }
 
 class MainProxy extends MessageQueue {
+  canvas: OffscreenCanvas | null;
   width: number;
   height: number;
   left: number;
@@ -131,6 +133,7 @@ class MainProxy extends MessageQueue {
   constructor(worker: Worker, eventTarget: EventTarget) {
     super(worker, eventTarget);
 
+    this.canvas = null;
     this.width = 0;
     this.height = 0;
     this.left = 0;
@@ -188,6 +191,13 @@ export async function createWorker(
     },
     [offscreen],
   );
+  window.addEventListener('resize', () => {
+    messageQueue.push(MessageType.EVENT, {
+      type: 'resize',
+      width: canvas.clientWidth,
+      height: canvas.clientHeight,
+    });
+  });
 
   return messageQueue;
 }
@@ -202,10 +212,11 @@ export async function receiveWorker(onCanvas: any) {
         height,
         width,
       }: {
-        canvas: HTMLCanvasElement | OffscreenCanvas;
+        canvas: OffscreenCanvas;
         width: number;
         height: number;
       } = args;
+      messageQueue.canvas = canvas;
       messageQueue.width = width;
       messageQueue.height = height;
       canvas.addEventListener = (
@@ -241,5 +252,9 @@ export async function receiveWorker(onCanvas: any) {
       onCanvas(args);
     },
   );
+  messageQueue.addEventListener('resize', ({ width, height }: any) => {
+    messageQueue.width = width;
+    messageQueue.height = height;
+  });
   return messageQueue;
 }

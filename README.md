@@ -26,9 +26,15 @@ First build then
 
 ## To Do
 
-https://gist.github.com/bellbind/f65f78a35bbbd4917a8ae4a6b18c5012
-https://stackoverflow.com/a/64575363
+- [x] Offscreen canvas
+- [ ] assign all `window` and `document` and add return promises
+- [ ] Worker WASM loader
+- [ ] PhysX
+- [ ] IPFS networking
 
-Offscreen canvas
-IPFS networking
-PhysX
+## Adapting a threejs project
+
+- Call `createWorker(canvas)` to create a worker and receive a proxy object.
+- Receive the worker with `receiveWorker(callback: ({ canvas, width, height, pixelRatio, }))`
+- All references to `renderer.domElement` become `window` or `proxy`
+- All function calls to `proxy`, `window` or `document` return promises that resolve to their original return values
