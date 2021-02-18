@@ -57,6 +57,14 @@ export class ThreeScene {
     light.position.set(5, 1, 1).normalize();
     this.scene.add(easyOrigin({ distance: 100 }));
 
+    const video = document.createElement('video');
+    video.src = 'ccc.mp4';
+    video.play();
+    video.addEventListener('play', () => {
+      console.log('video play!');
+    });
+    console.log(video);
+
     this.scene.add(
       new Mesh(
         new IcosahedronBufferGeometry(1, 8),

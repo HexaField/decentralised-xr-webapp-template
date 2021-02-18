@@ -2,6 +2,11 @@ import Stats from 'stats.js';
 import { createWorker } from './MessageQueue';
 
 export default async (canvas: HTMLCanvasElement): Promise<void> => {
+  await new Promise<void>((resolve) => {
+    window.addEventListener('click', () => {
+      resolve();
+    });
+  });
   // @ts-ignore
   if (canvas.transferControlToOffscreen) {
     (globalThis as any).canvasProxy = await renderOffscreenApp(canvas);

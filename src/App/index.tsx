@@ -5,7 +5,6 @@ import workerize from './workerize/';
 function App() {
   useEffect(() => {
     const canvas = document.getElementById('canvas') as HTMLCanvasElement;
-    (globalThis as any).canvas = canvas;
     workerize(canvas);
   });
 
