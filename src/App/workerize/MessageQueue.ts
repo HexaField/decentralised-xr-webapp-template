@@ -1,5 +1,10 @@
 import { simplifyObject } from '../../util/simplifyObject';
-import { EventDispatcher, Event as DispatchEvent, Object3D } from 'three';
+import {
+  EventDispatcher,
+  Event as DispatchEvent,
+  Object3D,
+  VideoTexture,
+} from 'three';
 import { generateUUID } from '../../util/generateUUID';
 import { isWebWorker } from '../../util/getEnv';
 
@@ -21,6 +26,8 @@ enum MessageType {
   DOCUMENT_ELEMENT_ADD_EVENT,
   DOCUMENT_ELEMENT_REMOVE_EVENT,
   DOCUMENT_ELEMENT_EVENT,
+  VIDEO_ELEMENT_CREATE,
+  VIDEO_ELEMENT_FRAME,
 }
 
 class EventDispatcherProxy extends EventDispatcher {
@@ -81,18 +88,6 @@ class MessageQueue extends EventDispatcherProxy {
     }, 1000 / 60);
   }
 
-  // push(
-  //   type: MessageType | any,
-  //   message: object,
-  //   transferables?: Transferable[],
-  // ) {
-  //   this.queue.push({
-  //     messageType: type,
-  //     message,
-  //     transferables,
-  //   });
-  // }
-
   sendQueue() {
     if (!this.queue?.length) return;
     const messages: object[] = [];
@@ -130,7 +125,6 @@ class MessageQueue extends EventDispatcherProxy {
         }
       }
     });
-    this.dispatchEvent(new CustomEvent('queue'));
   }
 
   addEventListener(
@@ -222,13 +216,53 @@ class AudioProxy extends DOMProxy {
   }
 }
 
-class VideoProxy extends AudioProxy {
+export class VideoProxy extends AudioProxy {
+  frameCallback: any;
   width: number;
   height: number;
+  video: ImageData | null;
+  readyState: number;
+
   constructor(messageQueue: MessageQueue) {
     super(messageQueue, 'video');
+    this.video = null;
     this.width = 0;
     this.height = 0;
+    this.readyState = 0;
+    this.messageTypeFunctions.set(
+      MessageType.VIDEO_ELEMENT_CREATE,
+      ({ width, height }: { width: number; height: number }) => {
+        this.width = width;
+        this.height = height;
+        this.video = new ImageData(
+          new Uint8ClampedArray(4 * this.width * this.height).fill(0),
+          this.width,
+          this.height,
+        );
+        /** @ts-ignore */
+      },
+    );
+    this.messageTypeFunctions.set(
+      MessageType.VIDEO_ELEMENT_FRAME,
+      ({
+        imageBuffer,
+        readyState,
+      }: {
+        imageBuffer: ArrayBuffer;
+        readyState: number;
+      }) => {
+        /** @ts-ignore */
+        this.video = new ImageData(
+          new Uint8ClampedArray(imageBuffer),
+          this.width,
+          this.height,
+        );
+        this.readyState = readyState;
+        if (this.frameCallback) {
+          this.frameCallback();
+        }
+      },
+    );
   }
   play() {
     this.messageQueue.queue.push({
@@ -249,6 +283,9 @@ class VideoProxy extends AudioProxy {
         arg: src,
       },
     } as Message);
+  }
+  requestVideoFrameCallback(callback: any) {
+    this.frameCallback = callback;
   }
 }
 
@@ -371,13 +408,54 @@ export async function createWorker(
     ({ type, uuid }: { type: string; uuid: string }) => {
       switch (type) {
         case 'video':
-          {
-            const video = document.createElement('video');
+          const video = document.createElement('video') as HTMLVideoElement;
+          documentElementMap.set(uuid, video);
+          video.onplay = (ev: any) => {
             /** @ts-ignore */
-            document.body.append(video);
-            video.crossOrigin = 'anonymous';
-            documentElementMap.set(uuid, video);
-          }
+            // const stream = video.captureStream();
+            // const [track] = stream.getVideoTracks();
+            /** @ts-ignore */
+            // const imageCapture = new ImageCapture(track);
+            const drawCanvas = document.createElement(
+              'canvas',
+            ) as HTMLCanvasElement;
+            drawCanvas.width = video.videoWidth;
+            drawCanvas.height = video.videoHeight;
+            const context = drawCanvas.getContext('2d');
+            messageQueue.queue.push({
+              messageType: MessageType.VIDEO_ELEMENT_CREATE,
+              message: {
+                width: video.videoWidth,
+                height: video.videoHeight,
+                proxyID: uuid,
+              },
+            } as Message);
+
+            const sendFrame = async () => {
+              context?.drawImage(video, 0, 0);
+              const imageBuffer = context?.getImageData(
+                0,
+                0,
+                video.videoWidth,
+                video.videoHeight,
+              ).data.buffer;
+              if (imageBuffer) {
+                messageQueue.queue.push({
+                  messageType: MessageType.VIDEO_ELEMENT_FRAME,
+                  message: {
+                    imageBuffer,
+                    readyState: video.readyState,
+                    proxyID: uuid,
+                  },
+                  transferables: [imageBuffer],
+                } as Message);
+              }
+              /** @ts-ignore */
+              video.requestVideoFrameCallback(sendFrame);
+            };
+            /** @ts-ignore */
+            video.requestVideoFrameCallback(sendFrame);
+          };
           break;
         default:
           break;

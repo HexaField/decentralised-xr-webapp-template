@@ -10,8 +10,14 @@ import {
   Mesh,
   MeshNormalMaterial,
   IcosahedronBufferGeometry,
+  VideoTexture,
+  PlaneBufferGeometry,
+  MeshBasicMaterial,
+  DoubleSide,
+  DataTexture,
 } from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
+import { VideoTextureProxy } from '../workerize/VideoTextureProxy';
 import { easyOrigin } from './origin';
 
 export class ThreeScene {
@@ -49,7 +55,7 @@ export class ThreeScene {
   }
 
   public init() {
-    this.camera.position.set(4, 1, 20);
+    this.camera.position.set(1, 1, 3);
     this.camera.lookAt(0, 0, 0);
     this.scene.fog = new Fog(0x444466, 100, 400);
     this.scene.background = new Color(0x444466);
@@ -58,18 +64,31 @@ export class ThreeScene {
     this.scene.add(easyOrigin({ distance: 100 }));
 
     const video = document.createElement('video');
-    video.src = 'ccc.mp4';
     video.addEventListener('play', () => {
-      console.log('video play!');
-    });
-    video.play();
+      /** @ts-ignore */
+      const videoTexture = new VideoTextureProxy(video);
+      /** @ts-ignore */
+      const videoMesh = new Mesh(
+        new PlaneBufferGeometry(
+          1,
+          videoTexture.image.height / videoTexture.image.width,
+        ),
+        new MeshBasicMaterial({ map: videoTexture, side: DoubleSide }),
+      );
 
-    this.scene.add(
-      new Mesh(
-        new IcosahedronBufferGeometry(1, 8),
-        new MeshNormalMaterial({ flatShading: true }),
-      ),
-    );
+      this.scene.add(videoMesh);
+    });
+    video.addEventListener('loadeddata', () => {
+      video.play();
+    });
+    video.src = 'ccc.mp4';
+
+    // this.scene.add(
+    //   new Mesh(
+    //     new IcosahedronBufferGeometry(1, 8),
+    //     new MeshNormalMaterial({ flatShading: true }),
+    //   ),
+    // );
     this.scene.add(light);
 
     this.animate();

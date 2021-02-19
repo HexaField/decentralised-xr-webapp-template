@@ -27,8 +27,11 @@ First build then
 ## To Do
 
 - [x] Offscreen canvas
-- [ ] assign all `window` and `document` and add return promises
 - [ ] polyfill media
+  - [x]  video
+  - [ ]  audio
+  - [ ]  webcam
+- [ ] polyfill needed `window` and `document` and add return promises
 - [ ] Worker WASM loader
 - [ ] PhysX
 - [ ] IPFS networking

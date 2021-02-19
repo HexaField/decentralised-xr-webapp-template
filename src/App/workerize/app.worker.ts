@@ -4,4 +4,9 @@ import { ThreeScene } from '../scene';
 let scene: any;
 receiveWorker((args: any) => {
   scene = new ThreeScene(args);
-}).then((proxy) => {});
+}).then((proxy) => {
+  proxy.addEventListener('animate', () => {
+    console.log(scene);
+    if (scene) scene.animate();
+  });
+});
